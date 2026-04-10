@@ -1,9 +1,46 @@
 #include "win.h"
 
+#include <functional>
 #include <sstream>
 
 #include "widget.h"
 #include "widgets_bin.h"
+
+namespace {
+
+struct LvFnBox {
+    std::function<void()> fn;
+};
+
+void lv_timer_cpp_trampoline(lv_timer_t* t)
+{
+    auto* box = static_cast<LvFnBox*>(t->user_data);
+    if (box && box->fn)
+        box->fn();
+}
+
+} // namespace
+
+lv_timer_t* ui_lv_timer_create_periodic(uint32_t period_ms, std::function<void()> fn)
+{
+    auto* box = new LvFnBox{std::move(fn)};
+    lv_timer_t* timer = lv_timer_create(lv_timer_cpp_trampoline, period_ms, box);
+    if (!timer) {
+        delete box;
+        return nullptr;
+    }
+    return timer;
+}
+
+void ui_lv_timer_del(lv_timer_t* timer)
+{
+    if (!timer)
+        return;
+    auto* box = static_cast<LvFnBox*>(timer->user_data);
+    timer->user_data = nullptr;
+    lv_timer_del(timer);
+    delete box;
+}
 
 bool WinManager::init(lv_obj_t* root, std::vector<std::string> binPaths, std::string& err)
 {
@@ -16,6 +53,13 @@ bool WinManager::init(lv_obj_t* root, std::vector<std::string> binPaths, std::st
     callbacks_.resize(binPaths_.size());
     destroy_callbacks_.clear();
     destroy_callbacks_.resize(binPaths_.size());
+    event_sink_cb_.clear();
+    event_sink_ud_.clear();
+    event_sink_cb_.resize(binPaths_.size(), nullptr);
+    event_sink_ud_.resize(binPaths_.size(), nullptr);
+    sys_update_build_ = nullptr;
+    sys_update_cb_ = nullptr;
+    sys_update_ud_ = nullptr;
     clear_build();
     current_ = -1;
     last_ = -1;
@@ -56,6 +100,50 @@ bool WinManager::register_window_callback(int windowIndex, WindowCallback cb, st
     }
     callbacks_[idx] = std::move(cb);
     return true;
+}
+
+bool WinManager::register_window_event_sink(int windowIndex, widgets_window_callback_t cb, void* user_data, std::string& err)
+{
+    err.clear();
+    if (windowIndex < 0) {
+        err = "windowIndex < 0";
+        return false;
+    }
+    const size_t idx = (size_t)windowIndex;
+    if (idx >= event_sink_cb_.size()) {
+        std::ostringstream ss;
+        ss << "windowIndex out of range: " << windowIndex;
+        err = ss.str();
+        return false;
+    }
+    event_sink_cb_[idx] = cb;
+    event_sink_ud_[idx] = user_data;
+    return true;
+}
+
+void WinManager::set_sys_update_sink(const WidgetsBuildResult* build, widgets_window_callback_t cb, void* user_data)
+{
+    sys_update_build_ = build;
+    sys_update_cb_ = cb;
+    sys_update_ud_ = user_data;
+}
+
+void WinManager::clear_sys_update_sink()
+{
+    sys_update_build_ = nullptr;
+    sys_update_cb_ = nullptr;
+    sys_update_ud_ = nullptr;
+}
+
+void WinManager::dispatch_periodic_ui_updates()
+{
+    if (hasBuild_ && current_ >= 0) {
+        const size_t i = (size_t)current_;
+        if (i < event_sink_cb_.size() && event_sink_cb_[i])
+            widgets_window_dispatch_synthetic(build_, event_sink_cb_[i], event_sink_ud_[i], APP_LV_EVENT_UPDATE);
+    }
+    if (sys_update_build_ && sys_update_cb_)
+        widgets_window_dispatch_synthetic(*sys_update_build_, sys_update_cb_, sys_update_ud_, APP_LV_EVENT_UPDATE);
 }
 
 bool WinManager::register_window_destroy_callback(int windowIndex, WindowDestroyCallback cb, std::string& err)

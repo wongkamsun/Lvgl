@@ -720,5 +720,8 @@ bool widgets_register_window_common(WinManager& win,
             err))
         return false;
 
+    if (!win.register_window_event_sink(windowIndex, cb, user_data, err))
+        return false;
+
     return true;
 }

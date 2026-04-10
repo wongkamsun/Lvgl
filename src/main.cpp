@@ -32,6 +32,7 @@
  #include "widgets_bin.h"
  #include "widget.h"
  #include "win.h"
+#include "mrker.h"
  #include "../app/main_win.h"
  #include "../app/set_window.h"
 
@@ -111,6 +112,43 @@
 
      std::cout << "LVGL C++ Simulator Started [Resolution: 800x480]" << std::endl;
 
+    // Moonraker 调试：自动发现并周期打印
+    mrker_configure("auto", "");
+    mrker_start();
+    lv_timer_t* mrker_dbg_timer_1s = ui_lv_timer_create_periodic(1000, []() {
+        const bool ok = mrker_is_connected();
+        const int code = mrker_last_http_code();
+        const float e = mrker_extruder_temp();
+        const float et = mrker_extruder_target();
+        const float b = mrker_bed_temp();
+        const float bt = mrker_bed_target();
+        const float p = mrker_print_progress01();
+        std::cout << "[mrker] base=" << (mrker_base_url() ? mrker_base_url() : "")
+                  << " ok=" << (ok ? 1 : 0)
+                  << " http=" << code
+                  << " E=" << e << "/" << et
+                  << " B=" << b << "/" << bt
+                  << " prog=" << p
+                  << " state=" << mrker_print_state()
+                  << " file=" << mrker_print_filename()
+                  << std::endl;
+    });
+    (void)mrker_dbg_timer_1s;
+
+     /* 主线程节拍：先业务 ui_loop（pre_tick + APP_LV_EVENT_UPDATE），再 LVGL 定时器/刷新 */
+     UiThreadTick ui_tick(win);
+     ui_tick.set_pre_tick([]() {
+         /* 等同原工程 app_update()：每轮可先跑轻量业务；重活可放 lv_timer */
+     });
+
+     /* 第三层：LVGL 定时器（在 lv_timer_handler 内按各自 period 触发，与上面 UPDATE 独立） */
+     static UiIdleActivity s_idle_watch;
+     lv_timer_t* idle_timer_5s = ui_lv_timer_create_periodic(5 * 1000, []() {
+         /* 类原 lv_timer_update_idle_timer：可用 s_idle_watch.idle_ms() 判断是否推 UPDATE_IDLE_TIMER */
+         (void)s_idle_watch.idle_ms();
+     });
+     (void)idle_timer_5s;
+
      /* 主循环 */
      auto last_tp = std::chrono::steady_clock::now();
      while(1) {
@@ -121,18 +159,18 @@
              last_tp = now_tp;
          }
 
-         /* 处理 LVGL 任务（动画、渲染、事件） */
-         uint32_t sleep_time_ms = lv_timer_handler();
+         ui_tick.run_ui_loop_phase();
 
-         if(sleep_time_ms == LV_NO_TIMER_READY){
-            sleep_time_ms = LV_DISP_DEF_REFR_PERIOD;
-         }
+         /* 处理 LVGL 任务（动画、渲染、lv_timer、输入等） */
+         (void)lv_timer_handler();
+
+         /* 主线程固定节拍 ~50Hz，与原先 usleep(20000) 一致 */
+         static constexpr uint32_t kMainLoopPeriodMs = 20;
 
  #ifdef _MSC_VER
-         Sleep(sleep_time_ms);
+         Sleep(kMainLoopPeriodMs);
  #else
-         // usleep 单位是微秒，所以乘以 1000
-         usleep(sleep_time_ms * 1000);
+         usleep(kMainLoopPeriodMs * 1000);
  #endif
      }
 
