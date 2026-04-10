@@ -2,8 +2,8 @@
 
 #include <sstream>
 
-#include "../src/widget.h"
-#include "../src/widgets_bin.h"
+#include "widget.h"
+#include "widgets_bin.h"
 
 bool WinManager::init(lv_obj_t* root, std::vector<std::string> binPaths, std::string& err)
 {

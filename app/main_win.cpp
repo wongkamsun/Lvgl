@@ -3,7 +3,7 @@
 #include <iostream>
 #include <string>
 
-#include "../tools/win.h"
+#include "../src/win.h"
 #include "../src/widget.h"
 
 namespace {

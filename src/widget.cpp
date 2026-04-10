@@ -7,7 +7,7 @@
 
 #include "lvgl/lvgl.h"
 
-#include "../tools/win.h"
+#include "win.h"
 #include "translation_bin.h"
 
 namespace {

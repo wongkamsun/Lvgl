@@ -6,7 +6,7 @@
 
 #include "lvgl/lvgl.h"
 
-#include "../src/widget.h"
+#include "widget.h"
 
 /**
  * 一个 bin 文件对应一个界面（window）。
