@@ -323,4 +323,3 @@ bool WinManager::pop_win(std::string& err)
     // 恢复后不重建、不重复派发 CREATED；需要刷新时业务可自行派发 APP_LV_EVENT_UPDATE
     return true;
 }
-
