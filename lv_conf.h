@@ -99,7 +99,6 @@
 /** Select operating system to use. Possible options:
  * - LV_OS_NONE
  * - LV_OS_PTHREAD
- * - LV_OS_FREERTOS
  * - LV_OS_CMSIS_RTOS2
  * - LV_OS_RTTHREAD
  * - LV_OS_WINDOWS
@@ -110,17 +109,6 @@
 
 #if LV_USE_OS == LV_OS_CUSTOM
     #define LV_OS_CUSTOM_INCLUDE <stdint.h>
-#endif
-#if LV_USE_OS == LV_OS_FREERTOS
-    /*
-     * Unblocking an RTOS task with a direct notification is 45% faster and uses less RAM
-     * than unblocking a task using an intermediary object such as a binary semaphore.
-     * RTOS task notifications can only be used when there is only one task that can be the recipient of the event.
-     */
-    #define LV_USE_FREERTOS_TASK_NOTIFY 1
-
-    /* Enable this to provide a custom implementation of lv_os_get_idle_percent. */
-    #define LV_OS_IDLE_PERCENT_CUSTOM 0
 #endif
 
 /*========================
@@ -982,6 +970,12 @@
 
 /** LODEPNG decoder library */
 #define LV_USE_LODEPNG 1
+/** lv_png.c / lodepng 使用宏名 LV_USE_PNG；与 LODEPNG 一并开启 */
+#if LV_USE_LODEPNG
+    #ifndef LV_USE_PNG
+        #define LV_USE_PNG 1
+    #endif
+#endif
 
 /** PNG decoder(libpng) library */
 #define LV_USE_LIBPNG 0

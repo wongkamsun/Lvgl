@@ -65,6 +65,26 @@
 					"isDefault": true
 				},
 				"dependsOn": "Build"
+			},
+			{
+				"label": "Generate UI headers (Excel → ui/*.h)",
+				"type": "shell",
+				"command": "python3",
+				"args": [
+					"${workspaceFolder}/tools/excel_to_ui_headers.py",
+					"--xlsx",
+					"${workspaceFolder}/tools/widgets.xlsx",
+					"--xlsx",
+					"${workspaceFolder}/ui/ui_i18n.xlsx",
+					"--out-widgets-h",
+					"${workspaceFolder}/ui/ui_widgets_generated.h",
+					"--out-i18n-h",
+					"${workspaceFolder}/ui/ui_i18n_generated.h"
+				],
+				"options": {
+					"cwd": "${workspaceFolder}"
+				},
+				"problemMatcher": []
 			}
 		],
 	},

@@ -1,41 +1,9 @@
 cmake_minimum_required(VERSION 3.12.4)
 project(lvgl C CXX)
 
-# Set the correct FreeRTOS port for your system (e.g., Posix for WSL)
-set(FREERTOS_PORT GCC_POSIX CACHE STRING "Port for FreeRTOS on Posix environment")
-
 set(LVGL_PRO_PROJECT_DIR
     ""
     CACHE PATH "Path to LVGL Pro Project folder")
-
-option(USE_FREERTOS "Enable FreeRTOS" OFF) # Turn this on to enable FreeRTOS
-
-if(USE_FREERTOS)
-    message(STATUS "FreeRTOS is enabled")
-
-    # FreeRTOS integration when USE_FREERTOS is enabled
-    add_library(freertos_config INTERFACE)
-    target_include_directories(freertos_config SYSTEM INTERFACE ${PROJECT_SOURCE_DIR}/config)
-    target_compile_definitions(freertos_config INTERFACE projCOVERAGE_TEST=0)
-
-    # Add FreeRTOS as a subdirectory
-    add_subdirectory(FreeRTOS)
-
-    # FreeRTOS-specific include directories
-    include_directories(${PROJECT_SOURCE_DIR}/FreeRTOS/include)
-    include_directories(${PROJECT_SOURCE_DIR}/FreeRTOS/portable/ThirdParty/GCC/Posix)
-    include_directories(${PROJECT_SOURCE_DIR}/config)
-
-    # Add FreeRTOS sources
-    file(GLOB FREERTOS_SOURCES
-        "${PROJECT_SOURCE_DIR}/FreeRTOS/*.c"
-        "${PROJECT_SOURCE_DIR}/FreeRTOS/portable/MemMang/heap_4.c"
-        "${PROJECT_SOURCE_DIR}/FreeRTOS/portable/ThirdParty/GCC/Posix/*.c"
-    )
-else()
-    message(STATUS "FreeRTOS is disabled")
-    set(FREERTOS_SOURCES "")  # No FreeRTOS sources if FreeRTOS is disabled
-endif()
 
 # Main include files of the project
 include_directories(${PROJECT_SOURCE_DIR}/main/inc)
@@ -64,42 +32,44 @@ add_compile_definitions($<$<BOOL:${LV_USE_DRAW_SDL}>:LV_USE_DRAW_SDL=1>)
 add_compile_definitions($<$<BOOL:${LV_USE_LIBPNG}>:LV_USE_LIBPNG=1>)
 add_compile_definitions($<$<BOOL:${LV_USE_LIBJPEG_TURBO}>:LV_USE_LIBJPEG_TURBO=1>)
 add_compile_definitions($<$<BOOL:${LV_USE_FFMPEG}>:LV_USE_FFMPEG=1>)
+add_compile_definitions($<$<BOOL:${LV_USE_FREETYPE}>:USE_LV_LIB_FREETYPE=1>)
 
 # Add LVGL subdirectory
-add_subdirectory(lvgl)
-target_include_directories(lvgl PUBLIC ${PROJECT_SOURCE_DIR} ${SDL2_INCLUDE_DIRS})
+add_subdirectory(lv_binding_cpp)
+# 必须先于 lv_binding_cpp，否则 #include "lv_conf.h" 会命中 lv_binding_cpp/lv_conf.h（无 FS/PNG），hal 里 LV_USE_FS_STDIO 为假、图片永远无法解码
+target_include_directories(lvgl BEFORE PUBLIC ${PROJECT_SOURCE_DIR} ${SDL2_INCLUDE_DIRS})
 
-set(MAIN_SOURCES src/mouse_cursor_icon.c src/hal/hal.c)
-set(MAIN_LIBS lvgl lvgl::examples lvgl::demos lvgl::thorvg ${SDL2_LIBRARIES})
-
-# Create the main executable, depending on the FreeRTOS option
-if(USE_FREERTOS)
-    list(APPEND MAIN_SOURCES src/freertos_main.c src/freertos/freertos_posix_port.c ${FREERTOS_SOURCES})
-    list(APPEND MAIN_LIBS freertos_config freertos_kernel)
-else()
-    list(APPEND MAIN_SOURCES src/main.c)
+set(MAIN_SOURCES src/mouse_cursor_icon.cpp src/hal/hal.c)
+set(MAIN_LIBS "")
+set(MAIN_INCLUDES "")
+list(APPEND MAIN_SOURCES src/main.cpp)
+if(EXISTS "${CMAKE_SOURCE_DIR}/src/widgets_bin.cpp")
+  list(APPEND MAIN_SOURCES src/widgets_bin.cpp)
 endif()
-
-
-if(NOT MSVC)
-    list(APPEND MAIN_LIBS m pthread)
+if(EXISTS "${CMAKE_SOURCE_DIR}/src/widget.cpp")
+  list(APPEND MAIN_SOURCES src/widget.cpp)
 endif()
-
-# Custom target to run the executable
-add_custom_target(run COMMAND ${EXECUTABLE_OUTPUT_PATH}/main DEPENDS main)
-
-# Conditionally include and link SDL2_image if LV_USE_DRAW_SDL is enabled
-if(LV_USE_DRAW_SDL)
-    set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
-    find_package(SDL2_image REQUIRED)
-    target_include_directories(lvgl PUBLIC ${SDL2_IMAGE_INCLUDE_DIRS})
-    list(APPEND MAIN_LIBS ${SDL2_IMAGE_LIBRARIES})
+if(EXISTS "${CMAKE_SOURCE_DIR}/app/main_win.cpp")
+  list(APPEND MAIN_SOURCES app/main_win.cpp)
+endif()
+if(EXISTS "${CMAKE_SOURCE_DIR}/app/set_window.cpp")
+  list(APPEND MAIN_SOURCES app/set_window.cpp)
+endif()
+if(EXISTS "${CMAKE_SOURCE_DIR}/tools/win.cpp")
+  list(APPEND MAIN_SOURCES tools/win.cpp)
+endif()
+if(EXISTS "${CMAKE_SOURCE_DIR}/src/translation_bin.cpp")
+  list(APPEND MAIN_SOURCES src/translation_bin.cpp)
 endif()
 
 # Conditionally include and link libpng if LV_USE_LIBPNG is enabled
 if(LV_USE_LIBPNG)
     find_package(PNG REQUIRED)
-    target_include_directories(lvgl PUBLIC ${PNG_INCLUDE_DIRS})
+    target_include_directories(.
+    ./lv_binding_cpp
+    ./lv_binding_cpp/lvgl
+    ./hal
+     PUBLIC ${PNG_INCLUDE_DIRS})
     list(APPEND MAIN_LIBS ${PNG_LIBRARIES})
 endif()
 
@@ -143,7 +113,41 @@ endif()
 
 add_executable(main ${MAIN_SOURCES})
 target_compile_definitions(main PRIVATE LV_CONF_INCLUDE_SIMPLE)
-target_link_libraries(main ${MAIN_LIBS})
+if(MAIN_INCLUDES)
+  target_include_directories(main PRIVATE ${MAIN_INCLUDES})
+endif()
+target_link_libraries(main PRIVATE lvgl lv_drivers lv_binding_cpp SDL2 ${MAIN_LIBS})
+
+# tools/ 下的小工具（可选：文件存在才构建，避免缺文件导致配置失败）
+if(EXISTS "${CMAKE_SOURCE_DIR}/tools/parse_main_widgets_json.cpp")
+  add_executable(parse_main_widgets_json "${CMAKE_SOURCE_DIR}/tools/parse_main_widgets_json.cpp")
+  target_compile_features(parse_main_widgets_json PRIVATE cxx_std_17)
+  set_target_properties(
+    parse_main_widgets_json PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+                                 "${CMAKE_SOURCE_DIR}/bin")
+endif()
+
+if(EXISTS "${CMAKE_SOURCE_DIR}/tools/json_to_widgets_bin.cpp")
+  add_executable(json_to_widgets_bin "${CMAKE_SOURCE_DIR}/tools/json_to_widgets_bin.cpp")
+  target_compile_features(json_to_widgets_bin PRIVATE cxx_std_17)
+  set_target_properties(
+    json_to_widgets_bin PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+                             "${CMAKE_SOURCE_DIR}/bin")
+endif()
+
+# tools/ 下的 CSV -> BIN 编译工具（替代 JSON 方式）
+add_executable(csv_to_widgets_bin "${CMAKE_SOURCE_DIR}/tools/csv_to_widgets_bin.cpp")
+target_compile_features(csv_to_widgets_bin PRIVATE cxx_std_17)
+set_target_properties(
+  csv_to_widgets_bin PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+                          "${CMAKE_SOURCE_DIR}/bin")
+
+# tools/ 下的翻译表 CSV -> BIN 工具（对应 tr.c/tr.h 的 translation.bin）
+add_executable(csv_to_translation_bin "${CMAKE_SOURCE_DIR}/tools/csv_to_translation_bin.cpp")
+target_compile_features(csv_to_translation_bin PRIVATE cxx_std_17)
+set_target_properties(
+  csv_to_translation_bin PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+                               "${CMAKE_SOURCE_DIR}/bin")
 
 # On Windows, GUI applications do not show a console by default,
 # which hides log output. This ensures a console is available for logging.

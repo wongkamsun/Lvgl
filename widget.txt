@@ -1,0 +1,83 @@
+|bin_header|window_header1||window_header2|...|widget_header1|style_header1||style_header2|flag_header1|widget_header2|..|
+
+bin_header 记录二进制文件校验信息和窗口数量
+window_header 记录窗口信息,包括窗口的ID以及窗口内控件偏移
+widget_header 记录控件信息,紧接着是该控件的style列表和flag.注意style有多个,flag只能有一个
+
+
+1. 窗口数据
+typedef struct __attribute__((packed)) window_header_tag
+{
+    uint32_t widget_offset; 控件起始偏移
+    uint16_t window_attr;   窗口属性,保留
+    uint8_t widget_numbers; 该窗口包含控件数量
+    uint8_t window_index;   窗口ID，ID=0默认为sys layer用于存放状态栏等常驻控件
+}window_header_t;
+
+RESERVE_BIT     INNER OBJ INDEX   CUSTOMER BIT    BUILT_IN BIT
+0000 0000 0000  000               0               0000 0000 0000 0000
+
+OBJ INDEX               0           1           2
+LV_STYLE_X              4103       135175      266247
+LV_STYLE_Y              4104       135176      266248
+LV_STYLE_ALIGN          4105       135177      266249
+LV_STYLE_WIDTH          4097       135169      266241
+LV_STYLE_HEIGHT         4100       135172      266244
+enum {
+    LV_ALIGN_DEFAULT = 0,
+    LV_ALIGN_TOP_LEFT,1
+    LV_ALIGN_TOP_MID,2
+    LV_ALIGN_TOP_RIGHT,3    
+    LV_ALIGN_BOTTOM_LEFT,4
+    LV_ALIGN_BOTTOM_MID,5
+    LV_ALIGN_BOTTOM_RIGHT,6
+    LV_ALIGN_LEFT_MID,7
+    LV_ALIGN_RIGHT_MID,8
+    LV_ALIGN_CENTER,9
+
+    LV_ALIGN_OUT_TOP_LEFT,10
+    LV_ALIGN_OUT_TOP_MID,11
+    LV_ALIGN_OUT_TOP_RIGHT,12
+    LV_ALIGN_OUT_BOTTOM_LEFT,13
+    LV_ALIGN_OUT_BOTTOM_MID,14
+    LV_ALIGN_OUT_BOTTOM_RIGHT,15
+    LV_ALIGN_OUT_LEFT_TOP,16
+    LV_ALIGN_OUT_LEFT_MID,17
+    LV_ALIGN_OUT_LEFT_BOTTOM18,
+    LV_ALIGN_OUT_RIGHT_TOP,19
+    LV_ALIGN_OUT_RIGHT_MID,20
+    LV_ALIGN_OUT_RIGHT_BOTTOM,21
+};
+
+LV_STYLE_TEXT_COLOR     1111
+LV_STYLE_BG_GRAD_COLOR  34
+LV_STYLE_BG_GRAD_DIR    35
+LV_STYLE_RADIUS     96
+LV_STYLE_BG_COLOR    32  
+LV_STYLE_BG_OPA 33
+
+CUSTOMER PROP   自定义属性
+1       IMAGE_INDEX     65537
+2       TR_INDEX        65538
+3       FONT_WEIGHT     65539   (style | weight):
+        FT_FONT_STYLE_NORMAL = 0,
+        FT_FONT_STYLE_ITALIC = 1 << 0,
+        FT_FONT_STYLE_BOLD   = 1 << 1
+4       PARENT_INDEX    65540   
+//对齐偏移使用控件的位置
+5       ALIGN_TOP_LEFT,     65541    
+6       ALIGN_TOP_MID,      65542
+7       ALIGN_TOP_RIGHT,    65543
+8       ALIGN_BOTTOM_LEFT,  65544
+9       ALIGN_BOTTOM_MID,   65545
+10      ALIGN_BOTTOM_RIGHT, 65546
+11      ALIGN_LEFT_TOP,     65547
+12      ALIGN_LEFT_MID,     65548
+13      ALIGN_LEFT_BOTTOM,  65549
+14      ALIGN_RIGHT_TOP,    65550
+15      ALIGN_RIGHT_MID,    65551
+16      ALIGN_RIGHT_BOTTOM, 65552
+
+
+//FLAG|MASK
+00000000|00000000

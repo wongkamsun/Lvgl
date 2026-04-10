@@ -10,3 +10,7 @@ bin/
 
 # MacOS file
 .DS_Store
+
+# Python
+__pycache__/
+*.pyc
